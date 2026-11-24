@@ -12,7 +12,7 @@
 // judge reads exactly what is in the file, so the text below is the
 // entire entry.
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // The tip itself. It is aimed at the moment every developer and agent
@@ -46,8 +46,25 @@ function validateTip(tip) {
   if (tip.trim().length === 0) {
     throw new Error('Tip must not be only white space.');
   }
+  // Invisible control characters would survive the length check but
+  // corrupt the loading-screen line (and the judge reads raw bytes).
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(tip)) {
+    throw new Error('Tip must not contain control characters.');
+  }
+  if (tip !== tip.trim()) {
+    throw new Error('Tip must not start or end with white space.');
+  }
 }
 
 validateTip(TIP);
 
-writeFileSync(join(outputDir, 'entry.txt'), TIP, 'utf8');
+const entryPath = join(outputDir, 'entry.txt');
+writeFileSync(entryPath, TIP, 'utf8');
+
+// Round-trip check: the file the judge reads must be byte-identical
+// to the validated tip, so a bad write fails loudly here, not at
+// scoring time.
+if (readFileSync(entryPath, 'utf8') !== TIP) {
+  throw new Error('entry.txt round-trip check failed: content differs from tip.');
+}
